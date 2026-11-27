@@ -2,7 +2,7 @@
 // approved work waits out an undo window, then an executor runs it.
 import { randomUUID } from 'node:crypto'
 import type { Db } from './db.ts'
-import { evaluate } from './policy.ts'
+import { evaluate, needsCosign } from './policy.ts'
 import { checkTransfer } from './scam.ts'
 import { issueIntent, verifyIntent } from './intents.ts'
 import type { ActionKind, ApprovalRequest, Contact, Payload, TelegramMessagePayload, TonTransferPayload } from './types.ts'
@@ -59,6 +59,7 @@ export function createQueue(d: QueueDeps) {
         contact,
         paidBefore: contact ? d.db.paidTo(contact.username) : [],
         hour: hour(),
+        blocklist: JSON.parse(d.db.get('blocklist') ?? '[]'),
       })
     }
     if (r.kind === 'telegram_message') {
@@ -68,9 +69,27 @@ export function createQueue(d: QueueDeps) {
     const res = evaluate({
       agentId: r.agentId, kind: r.kind, payload: r.payload, findings,
       spentToday: d.db.spentSince(startOfDay()), recipientKnown,
+      agentSpentToday: agentSpentToday(r),
     }, d.db.rules())
     Object.assign(r, { findings, verdict: res.verdict, risk: res.risk, reasons: res.reasons })
     if (res.verdict === 'hold') r.wasHeld = true
+  }
+
+  // GRAM this agent already committed today (sent, sending, or waiting for a co-signer).
+  function agentSpentToday(r: ApprovalRequest) {
+    return d.db.requestsSince(startOfDay())
+      .filter(x => x.id !== r.id && x.agentId === r.agentId && x.kind === 'ton_transfer' && ['done', 'scheduled', 'cosign'].includes(x.status))
+      .reduce((sum, x) => sum + Number((x.payload as TonTransferPayload).amount || 0), 0)
+  }
+
+  // After the wearer (or the policy) says yes: big transfers still need a second human.
+  function release(r: ApprovalRequest, event: string) {
+    if (needsCosign(r.kind, r.payload, d.db.rules(), Boolean(d.db.get('cosigner')))) {
+      r.status = 'cosign'
+      emit(r, `${event}:needs-cosign`, `over ${d.db.rules().cosignOver} GRAM`)
+      return
+    }
+    schedule(r, event)
   }
 
   function schedule(r: ApprovalRequest, event: string) {
@@ -84,7 +103,7 @@ export function createQueue(d: QueueDeps) {
   async function settle(r: ApprovalRequest, event: string) {
     await assess(r)
     if (r.verdict === 'deny') { r.status = 'denied'; emit(r, `${event}:policy-denied`, r.reasons.join('; ')); return r }
-    if (r.verdict === 'auto') { schedule(r, `${event}:auto`); return r }
+    if (r.verdict === 'auto') { release(r, `${event}:auto`); return r }
     r.status = 'pending'
     emit(r, `${event}:${r.verdict}`, r.reasons.join('; '))
     return r
@@ -112,7 +131,7 @@ export function createQueue(d: QueueDeps) {
       const check = verifyIntent(intent ?? '', r, d.secret, usedIntents, now())
       if (!check.ok) return { ok: false as const, reason: check.reason }
       usedIntents.add(intent!)
-      schedule(r, 'approved-by-wearer')
+      release(r, 'approved-by-wearer')
       return { ok: true as const, request: r }
     },
 
@@ -131,7 +150,7 @@ export function createQueue(d: QueueDeps) {
       d.db.audit('fixed-to-wallet-card', r.id, r.agentId, `${p.address} -> ${contact.cardAddress}`)
       await assess(r)
       if (r.verdict === 'hold' || r.verdict === 'deny') { r.status = 'pending'; emit(r, 'fix:still-held', r.reasons.join('; ')); return { ok: true as const, request: r } }
-      schedule(r, 'fix:approved-by-wearer') // the tap was the approval of the corrected payment
+      release(r, 'fix:approved-by-wearer') // the tap was the approval of the corrected payment
       return { ok: true as const, request: r }
     },
 
@@ -149,6 +168,17 @@ export function createQueue(d: QueueDeps) {
       r.version += 1
       d.db.audit('corrected-by-wearer', r.id, r.agentId, JSON.stringify(patch))
       await settle(r, 'corrected')
+      return { ok: true as const, request: r }
+    },
+
+    // The second person's answer (Telegram button from the co-signer's own chat).
+    cosign(id: string, version: number, approve: boolean, by: string) {
+      const r = d.db.getRequest(id)
+      if (!r || r.status !== 'cosign') return { ok: false as const, reason: 'not waiting for a co-signer' }
+      if (r.version !== version) return { ok: false as const, reason: 'request changed since it was sent' }
+      if (!approve) { r.status = 'denied'; emit(r, 'cosign-denied', `by @${by}`); return { ok: true as const, request: r } }
+      schedule(r, `cosigned`)
+      d.db.audit('cosigned-by', r.id, r.agentId, `@${by}`)
       return { ok: true as const, request: r }
     },
 
@@ -192,6 +222,7 @@ export function createQueue(d: QueueDeps) {
         (a.laterAt ?? 0) - (b.laterAt ?? 0) || RISK_ORDER[a.risk] - RISK_ORDER[b.risk] || a.createdAt - b.createdAt)
     },
     scheduled() { return d.db.requestsByStatus('scheduled') },
+    awaitingCosign() { return d.db.requestsByStatus('cosign') },
 
     today() {
       const rs = d.db.requestsSince(startOfDay())

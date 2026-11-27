@@ -69,6 +69,8 @@ export function buildView(q: Queue, meeting: Meeting | null, paired: boolean, pa
 
   const lines = [] as string[]
   if (meeting) lines.push(`${now < meeting.start ? `Next ${time(meeting.start)}` : 'Now'}: ${clip(meeting.title, 30)}`)
+  const waiting = q.awaitingCosign()
+  if (waiting.length) lines.push(`■ ${clip(waiting[0].title, 26)}: waiting for co-signer`)
   lines.push(`Today: ${t.total} requests, ${t.auto} ran on their own`)
   if (t.blocked) lines.push(`${t.blocked} suspicious payment${t.blocked > 1 ? 's' : ''} stopped`)
   lines.push('', 'HOLD and ask a number, e.g. "renewal value"')

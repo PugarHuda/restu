@@ -91,9 +91,19 @@ export function createTelegram(d: TelegramDeps) {
 
   async function onCallback(cq: Update) {
     const chatId = cq.message?.chat?.id
-    if (chatId !== ownerChat()) return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Not your queue' })
     const [op, id, version] = String(cq.data).split(':')
     const q = d.queue()
+    const cosigner = d.db.get('cosigner') ? d.db.getContact(String(d.db.get('cosigner'))) : null
+    if (op === 'c' || op === 'x') {
+      if (!cosigner || chatId !== cosigner.chatId) return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'You are not the co-signer' })
+      const res = q.cosign(id, Number(version), op === 'c', cosigner.username)
+      await api('answerCallbackQuery', { callback_query_id: cq.id, text: res.ok ? (op === 'c' ? 'Co-signed' : 'Refused') : res.reason })
+      await api('editMessageReplyMarkup', { chat_id: chatId, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {})
+      const owner = ownerChat()
+      if (owner && res.ok) await send(owner, `${op === 'c' ? '✅ Co-signed' : '⛔ Refused'} by @${cosigner.username}: ${res.request.title}`)
+      return
+    }
+    if (chatId !== ownerChat()) return api('answerCallbackQuery', { callback_query_id: cq.id, text: 'Not your queue' })
     const r = d.db.getRequest(id)
     let text = 'Done'
     if (!r || String(r.version) !== version) text = 'This request changed. Check the latest card.'
@@ -155,7 +165,7 @@ export function createTelegram(d: TelegramDeps) {
       return send(chatId, rows.join('\n') || 'Audit log is empty.')
     }
     if (text.startsWith('/rules')) return send(chatId, `<pre>${JSON.stringify(d.db.rules(), null, 1)}</pre>`, { parse_mode: 'HTML' })
-    const setRule = text.match(/^\/setrule\s+(autoTransferMax|dailyTransferCap|calendarAskAttendees)\s+(\d+(\.\d+)?)/)
+    const setRule = text.match(/^\/setrule\s+(autoTransferMax|dailyTransferCap|calendarAskAttendees|cosignOver)\s+(\d+(\.\d+)?)/)
     if (setRule) {
       const rules = { ...d.db.rules(), [setRule[1]]: Number(setRule[2]) }
       d.db.set('rules', JSON.stringify(rules))
@@ -171,13 +181,39 @@ export function createTelegram(d: TelegramDeps) {
       d.db.audit('address-verified', null, null, `@${c.username} ${wallet[2]}`)
       return send(chatId, `Verified ${wallet[2].slice(0, 6)}…${wallet[2].slice(-4)} for @${c.username}`)
     }
+    const cos = text.match(/^\/cosigner\s+@?(\w+)/)
+    if (cos) {
+      const c = d.db.getContact(cos[1])
+      if (!c?.chatId) return send(chatId, `@${cos[1]} must send /start to @${(await api('getMe')).username} first.`)
+      d.db.set('cosigner', c.username)
+      d.db.audit('cosigner-set', null, null, `@${c.username}`)
+      await send(c.chatId, `You are now the co-signer for Restu payments above ${d.db.rules().cosignOver} GRAM. You will get an Approve / Refuse card when one needs you.`)
+      return send(chatId, `Two-person rule on: transfers above ${d.db.rules().cosignOver} GRAM also need @${c.username}.`)
+    }
+    if (text.startsWith('/nocosigner')) { d.db.set('cosigner', ''); d.db.audit('cosigner-removed', null, null, ''); return send(chatId, 'Two-person rule off.') }
+    const blk = text.match(/^\/(un)?block\s+(\S+)/)
+    if (blk) {
+      const list: string[] = JSON.parse(d.db.get('blocklist') ?? '[]')
+      const next = blk[1] ? list.filter(a => a !== blk[2]) : [...new Set([...list, blk[2]])]
+      d.db.set('blocklist', JSON.stringify(next))
+      d.db.audit(blk[1] ? 'unblocked' : 'blocked', null, null, blk[2])
+      return send(chatId, `${blk[1] ? 'Removed from' : 'Added to'} the scam blocklist (${next.length} address${next.length === 1 ? '' : 'es'}).`)
+    }
+    const bud = text.match(/^\/setbudget\s+([\w:-]+)\s+(\d+(\.\d+)?)/)
+    if (bud) {
+      const rules = d.db.rules()
+      rules.agentBudgets = { ...rules.agentBudgets, [bud[1]]: Number(bud[2]) }
+      d.db.set('rules', JSON.stringify(rules))
+      d.db.audit('rule-changed', null, null, `budget ${bud[1]}=${bud[2]}`)
+      return send(chatId, `Budget for ${bud[1]}: ${bud[2]} GRAM per day.`)
+    }
     if (text.startsWith('/contacts')) {
       const rows = d.db.contacts().map(c => `@${c.username} · card: ${c.cardAddress ? `${c.cardAddress.slice(0, 6)}…${c.cardAddress.slice(-4)}` : 'none'}`)
       return send(chatId, rows.join('\n') || 'No contacts yet.')
     }
     if (text.startsWith('/demo') && d.onDemo) return send(chatId, await d.onDemo())
     if (text.startsWith('/start') || text.startsWith('/help')) {
-      return send(chatId, 'Restu commands:\n/audit · last actions\n/rules · current policy\n/setrule autoTransferMax 10\n/verify @user ADDRESS\n/contacts\n/demo · seed the Acme demo')
+      return send(chatId, 'Restu commands:\n/audit · last actions\n/rules · current policy\n/setrule autoTransferMax 10\n/setrule cosignOver 1\n/setbudget invoice-agent 5\n/cosigner @user · two-person rule\n/nocosigner\n/block ADDRESS · scam blocklist (/unblock)\n/verify @user ADDRESS\n/contacts\n/demo · seed the Acme demo')
     }
   }
 
@@ -226,6 +262,19 @@ export function createTelegram(d: TelegramDeps) {
     async notify(r: ApprovalRequest, event: string) {
       const owner = ownerChat()
       if (!owner) return
+      if (r.status === 'cosign' && event.endsWith(':needs-cosign')) {
+        const c = d.db.getContact(String(d.db.get('cosigner')))
+        if (c?.chatId) {
+          await send(c.chatId, `✍️ Co-sign needed · ${r.title}
+Approved by the owner on their glasses.
+
+${describe(r)}`, {
+            reply_markup: { inline_keyboard: [[{ text: 'Co-sign', callback_data: `c:${r.id}:${r.version}` }, { text: 'Refuse', callback_data: `x:${r.id}:${r.version}` }]] },
+          })
+          await send(owner, `⏳ ${r.title}: waiting for @${c.username} to co-sign.`)
+        }
+        return
+      }
       if (r.status === 'pending' && /^(submitted|corrected|fix:still-held)/.test(event)) {
         await send(owner, cardText(r), { reply_markup: buttons(r) })
       } else if (event === 'executed' || event === 'failed' || event.endsWith('policy-denied')) {

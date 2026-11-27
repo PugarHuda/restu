@@ -163,3 +163,44 @@ test('pairing: codes are unique, expire, and unpaired devices are capped', () =>
   assert.equal(db.deviceByCode('888888'), undefined)
   assert.equal(db.deviceByToken('z')?.chatId, 0)
 })
+
+test('two-person rule: big transfer waits for the co-signer after the wearer approves', async () => {
+  const { q, db, sent, advance } = setup()
+  db.saveContact({ username: 'cfo', userId: 9, chatId: 9, cardAddress: null, knownAddresses: [] })
+  db.set('cosigner', 'cfo')
+  const r = await q.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'Pay 3', payload: { to: 'omar', address: OMAR_CARD, amount: 3 } })
+  assert.equal(r.status, 'cosign')                      // auto by policy, but 3 > cosignOver 1
+  assert.equal(q.cosign(r.id, r.version + 1, true, 'cfo').ok, false) // stale version refused
+  assert.ok(q.cosign(r.id, r.version, true, 'cfo').ok)
+  advance(31_000)
+  await q.tick()
+  assert.deepEqual(sent, [`ton:${OMAR_CARD}`])
+})
+
+test('two-person rule: co-signer can refuse', async () => {
+  const { q, db, sent, advance } = setup()
+  db.saveContact({ username: 'cfo', userId: 9, chatId: 9, cardAddress: null, knownAddresses: [] })
+  db.set('cosigner', 'cfo')
+  const r = await q.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'Pay 3', payload: { to: 'omar', address: OMAR_CARD, amount: 3 } })
+  assert.ok(q.cosign(r.id, r.version, false, 'cfo').ok)
+  advance(60_000)
+  await q.tick()
+  assert.deepEqual(sent, [])
+})
+
+test('agent budget: over the daily budget the policy asks', async () => {
+  const { q } = setup()
+  const a = await q.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'a', payload: { to: 'omar', address: OMAR_CARD, amount: 4 } })
+  assert.equal(a.verdict, 'auto')
+  const b = await q.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'b', payload: { to: 'omar', address: OMAR_CARD, amount: 2 } })
+  assert.equal(b.verdict, 'ask')
+  assert.ok(b.reasons.some(x => x.includes('budget')))
+})
+
+test('blocklist: a reported address is held even when it is the wallet card', async () => {
+  const { q, db } = setup()
+  db.set('blocklist', JSON.stringify([OMAR_CARD]))
+  const r = await q.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'x', payload: { to: 'omar', address: OMAR_CARD, amount: 1 } })
+  assert.equal(r.verdict, 'hold')
+  assert.ok(r.findings.some(f => f.code === 'BLOCKLISTED'))
+})

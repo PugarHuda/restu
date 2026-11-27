@@ -2,10 +2,11 @@
 // this file draws three text boxes and turns gestures into actions.
 import {
   waitForEvenAppBridge, TextContainerProperty, CreateStartUpPageContainer, TextContainerUpgrade,
-  OsEventTypeList, AudioInputSource,
+  OsEventTypeList, AudioInputSource, ImuReportPace,
 } from '@evenrealities/even_hub_sdk'
 import { api, type GlassView } from './api'
 import { mountCompanion } from './companion'
+import { createNodDetector } from './nod'
 
 const bridge = await waitForEvenAppBridge()
 
@@ -126,6 +127,17 @@ async function stopListening() {
   refresh()
 }
 
+// Nod to approve (opt-in): the IMU streams only while the toggle is on.
+const nod = createNodDetector()
+let nodOn = (await bridge.getLocalStorage('restu_nod').catch(() => '')) === '1'
+async function setNod(on: boolean) {
+  nodOn = on
+  nod.reset()
+  await bridge.setLocalStorage('restu_nod', on ? '1' : '0')
+  await bridge.imuControl(on, ImuReportPace.P100)
+}
+if (nodOn) bridge.imuControl(true, ImuReportPace.P100)
+
 // CLICK_EVENT is 0 and protobuf drops zero values, so a tap arrives with no
 // eventType. Resolve the default only inside an envelope that exists.
 function typeOf(envelope?: { eventType?: OsEventTypeList }): OsEventTypeList | null {
@@ -135,6 +147,15 @@ function typeOf(envelope?: { eventType?: OsEventTypeList }): OsEventTypeList | n
 
 bridge.onEvenHubEvent(event => {
   if (event.audioEvent && recording) { recording.push(event.audioEvent.audioPcm); return }
+  const imu = event.sysEvent?.imuData
+  if (imu && event.sysEvent?.eventType === OsEventTypeList.IMU_DATA_REPORT) {
+    // A nod approves a normal card exactly like a tap (held payments never approve this way).
+    if (nodOn && nod.push({ x: imu.x ?? 0, y: imu.y ?? 0, z: imu.z ?? 0, t: Date.now() }) && view?.card && !view.card.hold) {
+      say('Nod: approved.\nSwipe ▲ within the timer to undo.', 2500)
+      act('approve', view.card.id, view.card.intent)
+    }
+    return
+  }
   const sys = typeOf(event.sysEvent)
   const text = typeOf(event.textEvent)
   const is = (t: OsEventTypeList) => sys === t || text === t
@@ -160,4 +181,5 @@ mountCompanion(document.getElementById('app')!, {
   },
   demo: async () => { const r = await api.demo(); await refresh(); return r.text },
   tap: onTap, swipeUp: onSwipeUp, swipeDown: onSwipeDown,
+  nod: { get: () => nodOn, set: setNod },
 })

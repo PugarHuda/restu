@@ -2,7 +2,7 @@
 // Deterministic lookup over live Google Sheets (or a local CSV): the answer is a
 // real cell with its address. No matching cell means no answer; nothing is generated.
 
-export interface Grid { tab: string; rows: string[][] }
+export interface Grid { tab: string; rows: string[][]; source?: string }
 export interface Answer { value: string; label: string; ref: string; source: string; fetchedAt: number }
 
 const STOP = new Set(['the', 'a', 'an', 'of', 'for', 'what', 'whats', 'is', 'our', 'my', 'in', 'on', 'to', 'how', 'much', 'many', 'and', 'berapa', 'yang', 'di'])
@@ -95,6 +95,8 @@ export interface SheetsConfig {
   apiKey?: string                         // for sheets shared "anyone with the link"
   oauth?: { clientId: string; clientSecret: string; refreshToken: string }
   localFiles?: { tab: string; path: string }[]
+  // Link-shared Google Sheets read without any key (CSV export), one tab each.
+  publicSheets?: { tab: string; id: string }[]
 }
 
 export function createSheets(cfg: SheetsConfig, readFile: (p: string) => Promise<string>) {
@@ -138,8 +140,21 @@ export function createSheets(cfg: SheetsConfig, readFile: (p: string) => Promise
       return cache
     }
     const grids: Grid[] = []
-    for (const f of cfg.localFiles ?? []) grids.push({ tab: f.tab, rows: parseCsv(await readFile(f.path)) })
-    cache = { at: Date.now(), grids, source: 'sample CSV (no Google Sheet configured)' }
+    for (const sheet of cfg.publicSheets ?? []) {
+      try {
+        const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheet.id}/export?format=csv`, { redirect: 'follow' })
+        const text = await res.text()
+        if (!res.ok || text.trimStart().startsWith('<')) throw new Error(`HTTP ${res.status}`)
+        grids.push({ tab: sheet.tab, rows: parseCsv(text), source: 'Google Sheet (live)' })
+      } catch (e) {
+        console.warn(`[sheets] ${sheet.tab}: live sheet unavailable (${(e as Error).message}), using sample CSV`)
+      }
+    }
+    for (const f of cfg.localFiles ?? []) {
+      if (grids.some(g => g.tab === f.tab)) continue
+      grids.push({ tab: f.tab, rows: parseCsv(await readFile(f.path)), source: 'sample CSV' })
+    }
+    cache = { at: Date.now(), grids, source: 'sample CSV' }
     return cache
   }
 
@@ -147,7 +162,9 @@ export function createSheets(cfg: SheetsConfig, readFile: (p: string) => Promise
     async ask(query: string, context: string[] = []): Promise<Answer | null> {
       const { grids, source, at } = await load()
       const hit = lookup(grids, query, context)
-      return hit && { ...hit, source, fetchedAt: at }
+      if (!hit) return null
+      const tab = hit.ref.split('!')[0]
+      return { ...hit, source: grids.find(g => g.tab === tab)?.source ?? source, fetchedAt: at }
     },
   }
 }

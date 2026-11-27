@@ -11,6 +11,7 @@ export interface PolicyInput {
   payload: Payload
   findings: Finding[]
   spentToday: number          // GRAM already sent today (all agents)
+  agentSpentToday?: number    // GRAM this agent already moved today
   recipientKnown: boolean     // telegram: we have talked to this person before
 }
 
@@ -42,6 +43,10 @@ export function evaluate(i: PolicyInput, rules: Rules): PolicyResult {
       if (i.spentToday + p.amount > rules.dailyTransferCap) {
         return { verdict: 'ask', risk: 'medium', reasons: [...reasons, `Over daily cap (${rules.dailyTransferCap} GRAM)`] }
       }
+      const budget = rules.agentBudgets?.[i.agentId]
+      if (budget !== undefined && (i.agentSpentToday ?? 0) + p.amount > budget) {
+        return { verdict: 'ask', risk: 'medium', reasons: [...reasons, `Over ${i.agentId} budget (${budget} GRAM/day)`] }
+      }
       if (p.amount > rules.autoTransferMax) {
         return { verdict: 'ask', risk, reasons: [...reasons, `Above auto limit (${rules.autoTransferMax} GRAM)`] }
       }
@@ -67,4 +72,9 @@ export function evaluate(i: PolicyInput, rules: Rules): PolicyResult {
     default:
       return { verdict: 'ask', risk, reasons }
   }
+}
+
+// Two-person rule: a large transfer needs a second human after the wearer approves.
+export function needsCosign(kind: ActionKind, payload: Payload, rules: Rules, hasCosigner: boolean): boolean {
+  return hasCosigner && kind === 'ton_transfer' && (payload as TonTransferPayload).amount > rules.cosignOver
 }

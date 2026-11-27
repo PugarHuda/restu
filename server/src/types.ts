@@ -7,6 +7,7 @@ export type Risk = 'low' | 'medium' | 'high'
 
 export type Status =
   | 'pending'    // waiting for the wearer (verdict ask/hold)
+  | 'cosign'     // wearer approved; a second person must co-sign (two-person rule)
   | 'scheduled'  // approved or auto; sits in the undo window
   | 'done'
   | 'failed'
@@ -75,6 +76,8 @@ export interface Rules {
   calendarAskAttendees: number // ask when a change touches this many people
   undoSeconds: { telegram_message: number; ton_transfer: number; calendar_change: number; generic: number }
   trustedAgents: string[]      // unknown agents are denied outright
+  cosignOver: number           // GRAM; above this a second person must co-sign (when a co-signer is set)
+  agentBudgets: Record<string, number> // GRAM per agent per day; over budget → ask
 }
 
 export const DEFAULT_RULES: Rules = {
@@ -84,4 +87,6 @@ export const DEFAULT_RULES: Rules = {
   calendarAskAttendees: 3,
   undoSeconds: { telegram_message: 10, ton_transfer: 30, calendar_change: 10, generic: 10 },
   trustedAgents: ['followup-agent', 'invoice-agent', 'calendar-agent'],
+  cosignOver: 1,
+  agentBudgets: { 'invoice-agent': 5 },
 }

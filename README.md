@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" width="128" alt="Restu logo: glasses with a queue in one lens and a consent check in the other"></p>
+
 # Restu
 
 **Your agents ask. Your glasses decide.**
@@ -23,6 +25,8 @@ Track: **AI Assistants & Work** (core: Claude, Google Workspace) · second track
 | **Even Hub package** | [`restu.ehpk` (v0.1.0 release)](https://github.com/PugarHuda/restu/releases/tag/v0.1.0) |
 | **Telegram bot** | [@restu_glasses_bot](https://t.me/restu_glasses_bot) |
 | **API** | `https://seen-hrs-paul-sox.trycloudflare.com` (`/health`) |
+| **Anti-scam evaluation** | [`docs/scam-eval.md`](docs/scam-eval.md): 200 labelled scenarios, 125/125 scams held, 0/75 legitimate payments wrongly held (synthetic; limits stated) |
+| **Live Google Sheet (ASK)** | [Restu demo · Metrics](https://docs.google.com/spreadsheets/d/1_WL8d45ZtgK6mcX_duG67YruN1J5d2V_NOPRR1j4ef8/edit) (link-shared, read live by the server) |
 | **Agent wallet (TON testnet)** | [`0QDanv8w…emB0J` on tonviewer](https://testnet.tonviewer.com/0QDanv8woLK2AzsY5M7hMBOxsMPZV5wcqzVmflXso8IemB0J): the demo's real transfers (0.1 GRAM courier fee auto-approved; 1.5 GRAM invoice re-routed from a poisoned address to the verified wallet card) |
 
 Everything in the video is real: screenshots from the official Even Hub simulator and the owner's Telegram, a real bot, real TON testnet transfers. The recorder that produced it is in [`docs/video/`](docs/video/).
@@ -42,8 +46,11 @@ Everything in the video is real: screenshots from the official Even Hub simulato
 | **Policy, not prompts** | Replies to known contacts, transfers ≤ 10 GRAM to a verified address and small calendar edits run on their own, after an undo window. Bigger, newer or riskier actions ask. Unknown agents are denied. Daily cap. Rules editable from Telegram (`/setrule`). |
 | **Outgoing-payment anti-scam** | Before money leaves, Restu checks the address against the recipient's **Telegram wallet card** (`getChat().ton_wallet_card`, Bot API 10.4), flags first-time addresses, **look-alike (poisoned) addresses**, unusual amounts and night-time requests. A high-risk payment is *held*: it cannot be approved with a tap; the one-tap fix pays their verified wallet-card address instead. |
 | **Intents bound to what you saw** | Approving sends back an HMAC intent tied to the exact payload version, single-use, 5-minute TTL. An agent cannot swap the amount or recipient after the card was shown. A spoken correction can change the amount or text, never the address. |
+| **Two-person rule** | Transfers above `cosignOver` (default 1 GRAM) need a second human after the wearer: the co-signer gets a Telegram card (Co-sign / Refuse), bound to the payload version. `/cosigner @user`. |
+| **Agent budgets + scam blocklist** | Each agent has a daily GRAM budget (`/setbudget invoice-agent 5`); over budget the policy asks. Addresses reported with `/block` are always held. |
+| **Nod to approve** (experimental, opt-in) | With the toggle on, the G2 IMU streams and a head nod approves a normal card like a tap; held payments never approve this way, and the undo window still applies. |
 | **Undo + audit** | Everything waits out a 10–30 s undo window (swipe ▲). Every decision, auto-run and execution lands in one audit log, mirrored to Telegram (`/audit`). |
-| **ASK: your numbers, mid-meeting** | Hold, say "renewal value" → `$48,000 · Acme · Renewal value · Deals!B2 · read 14:41`. Live Google Sheets (or CSV), deterministic cell lookup, scoped to the meeting you are in (calendar ICS). No matching cell → no answer. Nothing is generated. |
+| **ASK: your numbers, mid-meeting** | Hold, say "renewal value" → `$48,000 · Acme · Renewal value · Deals!B2 · read 14:41`. Live Google Sheets (link-shared sheets need no key; or Sheets API / OAuth), deterministic cell lookup, scoped to the meeting you are in (calendar ICS). No matching cell → no answer. Nothing is generated. The answer says where it came from (`Google Sheet (live)` or `sample CSV`). |
 
 ## On the glasses
 
@@ -91,7 +98,8 @@ Requirements: Node 22.13+.
 cd server
 npm install
 cp .env.example .env         # DEMO_MODE=1 works with no keys at all
-npm test                     # 23 tests: policy, scam checks, intents, queue, ASK, ICS
+npm test                     # 28 tests: policy, scam checks, intents, queue, co-sign, budgets, blocklist, pairing, ASK, ICS
+npm run eval                 # anti-scam evaluation → docs/scam-eval.md
 npm start                    # http://localhost:8787
 
 # 2. glasses app + simulator
@@ -126,7 +134,7 @@ curl -X POST localhost:8787/v1/requests -H "authorization: Bearer <agent key>" -
 
 ### Telegram commands (owner)
 
-`/audit` · `/rules` · `/setrule autoTransferMax 10` · `/verify @user ADDRESS` · `/contacts` · `/demo`
+`/audit` · `/rules` · `/setrule autoTransferMax 10` · `/setrule cosignOver 1` · `/setbudget invoice-agent 5` · `/cosigner @user` · `/nocosigner` · `/block ADDRESS` · `/unblock ADDRESS` · `/verify @user ADDRESS` · `/contacts` · `/demo`
 
 ## Safety and the hackathon rules
 

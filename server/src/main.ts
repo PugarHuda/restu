@@ -34,6 +34,11 @@ const sheets = createSheets({
     clientId: env.GOOGLE_CLIENT_ID ?? '', clientSecret: env.GOOGLE_CLIENT_SECRET ?? '', refreshToken: env.GOOGLE_REFRESH_TOKEN,
   } : undefined,
   localFiles: [{ tab: 'Deals', path: 'data/deals.csv' }, { tab: 'Metrics', path: 'data/metrics.csv' }],
+  // GOOGLE_SHEETS=Deals=<sheetId>,Metrics=<sheetId> (sheets shared as "anyone with the link")
+  publicSheets: (env.GOOGLE_SHEETS ?? '').split(',').filter(Boolean).map(pair => {
+    const [tab, id] = pair.split('=')
+    return { tab: tab.trim(), id: (id ?? '').trim() }
+  }).filter(x => x.tab && x.id),
 }, p => readFile(p, 'utf8'))
 
 const tg = env.TELEGRAM_BOT_TOKEN ? createTelegram({

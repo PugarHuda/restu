@@ -8,6 +8,7 @@ export interface TransferCheckInput {
   contact: Contact | null
   paidBefore: { address: string; amount: number }[] // past transfers to this contact
   hour: number                                      // wearer's local hour, 0-23
+  blocklist?: string[]                              // addresses the owner reported as scams
 }
 
 // Same account regardless of friendly-format flags (bounceable, testnet, url-safe).
@@ -46,6 +47,10 @@ export function checkTransfer(i: TransferCheckInput): Finding[] {
     ...i.paidBefore.map(p => p.address),
   ]
   const matchesTrusted = trusted.some(t => sameAddress(t, i.address))
+
+  if ((i.blocklist ?? []).some(b => sameAddress(b, i.address))) {
+    out.push({ code: 'BLOCKLISTED', severity: 'high', message: 'Address is on your scam blocklist' })
+  }
 
   if (!i.contact) {
     out.push({ code: 'UNKNOWN_RECIPIENT', severity: 'high', message: 'Recipient is not a known contact' })
