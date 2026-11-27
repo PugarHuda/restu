@@ -9,12 +9,17 @@
     {
       "name": "network",
       "desc": "Talks to your Restu server to show approval requests from your agents and send your decisions.",
-      "whitelist": ["http://localhost:8787"]
+      "whitelist": [
+        "http://localhost:8787",
+        "https://seen-hrs-paul-sox.trycloudflare.com"
+      ]
     },
     {
       "name": "g2-microphone",
       "desc": "Hold to speak: ask a number from your sheet or edit a pending request."
     }
   ],
-  "supported_languages": ["en"]
+  "supported_languages": [
+    "en"
+  ]
 }
