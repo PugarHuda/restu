@@ -43,8 +43,8 @@ export async function seedAcme(d: DemoDeps): Promise<string> {
   const submitted = [
     await d.queue.submit({ agentId: 'followup-agent', kind: 'telegram_message', title: 'Follow-up to Omar', payload: { to: username, text } }),
     await d.queue.submit({ agentId: 'calendar-agent', kind: 'calendar_change', title: 'Move Acme kickoff', payload: { eventTitle: 'Acme kickoff', change: 'move to Fri 10:00', attendees: 4 } }),
-    await d.queue.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'Pay Acme invoice #41', payload: { to: username, address: poisonedTwin(card), amount: 25, memo: 'Invoice #41' } }),
-    await d.queue.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'Courier fee', payload: { to: username, address: card, amount: 2, memo: 'Courier' } }),
+    await d.queue.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'Pay Acme invoice #41', payload: { to: username, address: poisonedTwin(card), amount: 1.5, memo: 'Invoice #41' } }),
+    await d.queue.submit({ agentId: 'invoice-agent', kind: 'ton_transfer', title: 'Courier fee', payload: { to: username, address: card, amount: 0.1, memo: 'Courier' } }),
   ]
   return submitted.map(r => `${r.title}: ${r.verdict}${r.reasons[0] ? ` (${r.reasons[0]})` : ''}`).join('\n')
 }

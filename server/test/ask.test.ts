@@ -66,3 +66,12 @@ test('wav header', () => {
   assert.equal(w.readUInt32LE(24), 16000)
   assert.equal(w.length, 3244)
 })
+
+test('retry429 backs off on rate limits and rethrows other errors', async () => {
+  const { retry429 } = await import('../src/ton.ts')
+  let calls = 0
+  const v = await retry429(async () => { if (++calls < 3) throw new Error('Request failed with status code 429'); return 'ok' }, 5, 1)
+  assert.equal(v, 'ok')
+  assert.equal(calls, 3)
+  await assert.rejects(retry429(async () => { throw new Error('boom') }, 5, 1), /boom/)
+})

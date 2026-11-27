@@ -14,6 +14,19 @@ Track: **AI Assistants & Work** (core: Claude, Google Workspace) · second track
 
 ![Held invoice on G2](docs/shots/02-held-invoice.png)
 
+## Live
+
+| | |
+|---|---|
+| **Demo video (89 s)** | https://restu-glasses.vercel.app/restu-demo.mp4 (also in [`docs/restu-demo.mp4`](docs/restu-demo.mp4)) |
+| **Glasses app (load on G2 via QR / simulator)** | https://restu-glasses.vercel.app |
+| **Even Hub package** | [`restu.ehpk` (v0.1.0 release)](https://github.com/PugarHuda/restu/releases/tag/v0.1.0) |
+| **Telegram bot** | [@restu_glasses_bot](https://t.me/restu_glasses_bot) |
+| **API** | `https://seen-hrs-paul-sox.trycloudflare.com` (`/health`) |
+| **Agent wallet (TON testnet)** | [`0QDanv8w…emB0J` on tonviewer](https://testnet.tonviewer.com/0QDanv8woLK2AzsY5M7hMBOxsMPZV5wcqzVmflXso8IemB0J): the demo's real transfers (0.1 GRAM courier fee auto-approved; 1.5 GRAM invoice re-routed from a poisoned address to the verified wallet card) |
+
+Everything in the video is real: screenshots from the official Even Hub simulator and the owner's Telegram, a real bot, real TON testnet transfers. The recorder that produced it is in [`docs/video/`](docs/video/).
+
 ## The problem
 
 1. **Agents can act now, but a human still has to sign.** Every approval pulls you to your phone, often mid-meeting.
