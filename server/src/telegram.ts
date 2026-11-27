@@ -42,7 +42,7 @@ export function createTelegram(d: TelegramDeps) {
     if (hit && Date.now() - hit.at < 60_000) return hit.address
     try {
       const chat = await api<{ ton_wallet_card?: { address?: string } }>('getChat', { chat_id: userId })
-      const address = chat.ton_wallet_card?.address ?? null
+      const address = chat.ton_wallet_card?.address || null
       cardCache.set(userId, { at: Date.now(), address })
       return address
     } catch {

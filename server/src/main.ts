@@ -80,9 +80,9 @@ async function correct(id: string, spoken: string) {
 async function demo() {
   return seedAcme({
     db, queue,
-    contact: env.DEMO_CONTACT ?? 'omar_acme',
+    contact: env.DEMO_CONTACT || 'omar_acme',
     // a deterministic stand-in testnet address when the demo contact has no wallet card
-    cardFallback: env.DEMO_RECIPIENT_CARD ?? new Address(0, createHash('sha256').update('restu-demo-omar').digest()).toString({ testOnly: true, bounceable: false }),
+    cardFallback: env.DEMO_RECIPIENT_CARD || new Address(0, createHash('sha256').update('restu-demo-omar').digest()).toString({ testOnly: true, bounceable: false }),
     ask: async q => { const m = await calendar.current(); return (await sheets.ask(q, contextTerms(m)))?.value ?? null },
     draft: facts => llm.draftFollowup({ meeting: 'Acme renewal', person: 'Omar', facts }),
   })

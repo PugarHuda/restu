@@ -65,6 +65,12 @@ function say(text: string, ms = 6000) { toast = { text, until: Date.now() + ms }
 
 async function refresh() {
   try { view = await api.state() } catch (e) {
+    // The server forgot this device (reset or expired code): get a fresh pairing code.
+    if ((e as Error).message.startsWith('unknown device')) {
+      await bridge.setLocalStorage('restu_token', '')
+      api.setToken(await deviceToken())
+      return refresh()
+    }
     view = { screen: 'home', header: 'RESTU  offline', body: `Cannot reach the Restu server.\n${(e as Error).message}`, footer: 'Retrying...' }
   }
   render()
