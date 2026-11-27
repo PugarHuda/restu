@@ -11,6 +11,7 @@ export interface GlassView {
   footer: string
   card?: { id: string; intent: string; hold: boolean; fixable: boolean }
   undo?: { id: string; secondsLeft: number }
+  toast?: string      // short-lived answer (ASK / edit result) shown over the body
 }
 
 const short = (a: string) => (a.length > 16 ? `${a.slice(0, 6)}...${a.slice(-6)}` : a)

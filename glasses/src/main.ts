@@ -57,6 +57,7 @@ function render() {
   draw('header', view.header)
   if (recording) draw('body', '● Listening...\n\nRelease to send')
   else if (toast && toast.until > Date.now()) draw('body', toast.text)
+  else if (view.toast) draw('body', view.toast)
   else draw('body', view.body)
   draw('footer', view.footer)
 }
@@ -149,7 +150,7 @@ bridge.onEvenHubEvent(event => {
 // The phone screen: typed fallback for ask/edit (handy in the simulator) and demo controls.
 mountCompanion(document.getElementById('app')!, {
   view: () => view,
-  ask: async text => { const r = await api.ask(text); say(r.text, 9000); return r.text },
+  ask: async text => { const r = await api.ask(text); await refresh(); return r.text },
   correct: async text => {
     const c = view?.card
     if (!c) return 'No card to edit'

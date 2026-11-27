@@ -20,6 +20,11 @@ export interface HttpDeps {
   demo?: () => Promise<string>
 }
 
+// Last ASK/edit result per device, shown on the lens for a few seconds whichever
+// client asked (G2 voice, phone page, or a scripted demo).
+const toasts = new Map<string, { text: string; until: number }>()
+const toast = (device: string, text: string) => toasts.set(device, { text, until: Date.now() + 9000 })
+
 const KINDS: ActionKind[] = ['telegram_message', 'ton_transfer', 'calendar_change', 'generic']
 
 // Auth is a header token (x-device / Bearer), never a cookie, so a permissive origin
@@ -102,6 +107,8 @@ export function createHttp(d: HttpDeps) {
 
       if (path === '/v1/glass/state') {
         const view: GlassView = buildView(d.queue, paired ? await d.meeting() : null, paired, device.code, d.botName())
+        const t = toasts.get(device.token)
+        if (t && t.until > Date.now()) view.toast = t.text
         return send(res, 200, view)
       }
       if (!paired) return send(res, 403, { error: 'pair first' })
@@ -120,11 +127,18 @@ export function createHttp(d: HttpDeps) {
       }
       if (path === '/v1/glass/ask' && req.method === 'POST') {
         const b = await json(req)
-        return send(res, 200, await d.ask(String(b.text ?? '')))
+        const answer = await d.ask(String(b.text ?? ''))
+        toast(device.token, `"${String(b.text ?? '').slice(0, 40)}"
+
+${answer.text}`)
+        return send(res, 200, answer)
       }
       if (path === '/v1/glass/correct' && req.method === 'POST') {
         const b = await json(req)
-        return send(res, 200, await d.correct(String(b.id ?? ''), String(b.text ?? '')))
+        const out = await d.correct(String(b.id ?? ''), String(b.text ?? ''))
+        toast(device.token, out.ok ? `Updated: "${String(b.text ?? '').slice(0, 60)}"
+Check the card again.` : `Not updated: ${out.reason}`)
+        return send(res, 200, out)
       }
       // Raw 16 kHz PCM from the G2 mic, transcribed server-side so no key ships in the app.
       if (path === '/v1/glass/voice' && req.method === 'POST') {

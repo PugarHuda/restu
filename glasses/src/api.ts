@@ -8,6 +8,7 @@ export interface GlassView {
   footer: string
   card?: { id: string; intent: string; hold: boolean; fixable: boolean }
   undo?: { id: string; secondsLeft: number }
+  toast?: string
 }
 
 let token = ''
