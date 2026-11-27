@@ -3,9 +3,10 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = 'F:/Hackathons/Heads Up Even Realities Hackathon/restu'
-const OUT = new URL('./frames', import.meta.url).pathname.replace(/^/([A-Z]:)/, '$1')
+const ROOT = fileURLToPath(new URL('../..', import.meta.url)).replace(/[\/]$/, '')
+const OUT = fileURLToPath(new URL('./frames', import.meta.url))
 const API = 'http://localhost:8787'
 const SIM = 'http://localhost:9898'
 const BRIDGE = 'http://127.0.0.1:4999'
