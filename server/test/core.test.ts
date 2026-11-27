@@ -147,3 +147,19 @@ test('queue: approval needs a fresh intent; a changed payload invalidates it', a
   const fresh = q.intentFor(q.pending()[0])
   assert.ok(q.decide(r.id, 'approve', fresh).ok)
 })
+
+test('pairing: codes are unique, expire, and unpaired devices are capped', () => {
+  const db = openDb()
+  let n = 0
+  const same = () => '123456'
+  assert.equal(db.newDevice('t1', same, false), '123456')
+  assert.equal(db.newDevice('t2', same, false), null)            // collision on every retry → refused
+  assert.equal(db.deviceByCode('123456')?.token, 't1')
+  db.saveDevice('t1', null, 42)                                  // paired: code no longer usable
+  assert.equal(db.deviceByCode('123456'), undefined)
+  for (let i = 0; i < 20; i++) db.newDevice(`x${i}`, () => String(100000 + n++), false)
+  assert.equal(db.newDevice('y', () => '999999', false), null)  // cap of 20 waiting devices
+  db.newDevice('z', () => '888888', true)                        // auto-paired: no usable code stored
+  assert.equal(db.deviceByCode('888888'), undefined)
+  assert.equal(db.deviceByToken('z')?.chatId, 0)
+})

@@ -21,6 +21,7 @@ type Update = Record<string, any>
 export function createTelegram(d: TelegramDeps) {
   const base = `https://api.telegram.org/bot${d.token}`
   const cardCache = new Map<number, { at: number; address: string | null }>()
+  const pairFails = new Map<number, { n: number; since: number }>()
 
   async function api<T = any>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     const res = await fetch(`${base}/${method}`, {
@@ -127,9 +128,14 @@ export function createTelegram(d: TelegramDeps) {
 
     const pair = text.match(/^\/pair\s+(\d{6})/)
     if (pair) {
-      const dev = d.db.deviceByCode(pair[1])
-      if (!dev) return send(chatId, 'Unknown code. Open Restu on your glasses to get a fresh one.')
       if (owner && owner !== chatId) return send(chatId, 'This Restu already has an owner.')
+      // Brute-forcing a 6-digit code: 5 wrong tries per chat per 10 minutes.
+      const tries = pairFails.get(chatId) ?? { n: 0, since: Date.now() }
+      if (Date.now() - tries.since > 10 * 60_000) { tries.n = 0; tries.since = Date.now() }
+      if (tries.n >= 5) return send(chatId, 'Too many wrong codes. Try again in 10 minutes.')
+      const dev = d.db.deviceByCode(pair[1])
+      if (!dev) { tries.n++; pairFails.set(chatId, tries); return send(chatId, 'Unknown or expired code. Open Restu on your glasses to get a fresh one.') }
+      pairFails.delete(chatId)
       d.db.set('owner_chat_id', String(chatId))
       d.db.saveDevice(dev.token, null, chatId)
       d.db.audit('paired', null, null, `chat ${chatId}`)
@@ -197,9 +203,11 @@ export function createTelegram(d: TelegramDeps) {
               if (u.message) await onMessage(u.message)
               else if (u.callback_query) await onCallback(u.callback_query)
               else if (u.business_connection) {
+                // Only the owner's own account may let Restu reply on their behalf.
                 const bc = u.business_connection
+                if (bc.user_chat_id !== ownerChat()) continue
                 if (bc.is_enabled) d.db.set('business_connection_id', bc.id)
-                else d.db.set('business_connection_id', '')
+                else if (d.db.get('business_connection_id') === bc.id) d.db.set('business_connection_id', '')
                 d.db.audit(bc.is_enabled ? 'business-connected' : 'business-disconnected', null, null, '')
               }
             } catch (e) {

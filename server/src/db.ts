@@ -4,6 +4,7 @@ import type { ApprovalRequest, Contact, Rules } from './types.ts'
 import { DEFAULT_RULES } from './types.ts'
 
 export type Db = ReturnType<typeof openDb>
+export const PAIR_CODE_TTL_MS = 10 * 60_000
 
 export function openDb(path = ':memory:') {
   const db = new DatabaseSync(path)
@@ -15,6 +16,7 @@ export function openDb(path = ':memory:') {
     create table if not exists payments (id integer primary key autoincrement, username text, address text not null, amount real not null, at integer not null);
     create table if not exists kv (k text primary key, v text not null);
     create table if not exists devices (token text primary key, code text, chat_id integer, created_at integer not null);
+    create unique index if not exists devices_code on devices (code) where code is not null;
   `)
 
   const q = {
@@ -34,7 +36,9 @@ export function openDb(path = ':memory:') {
     putKv: db.prepare('insert into kv (k, v) values (?, ?) on conflict(k) do update set v = excluded.v'),
     putDevice: db.prepare('insert into devices (token, code, chat_id, created_at) values (?, ?, ?, ?) on conflict(token) do update set code = excluded.code, chat_id = excluded.chat_id'),
     deviceByToken: db.prepare('select token, code, chat_id as chatId from devices where token = ?'),
-    deviceByCode: db.prepare('select token, code, chat_id as chatId from devices where code = ?'),
+    deviceByCode: db.prepare('select token, code, chat_id as chatId from devices where code = ? and chat_id is null and created_at >= ?'),
+    unpairedSince: db.prepare('select count(*) as n from devices where chat_id is null and created_at >= ?'),
+    dropStale: db.prepare('delete from devices where chat_id is null and created_at < ?'),
   }
 
   const parse = <T>(row: unknown): T | null => (row ? JSON.parse((row as { data: string }).data) as T : null)
@@ -67,6 +71,18 @@ export function openDb(path = ':memory:') {
 
     saveDevice(token: string, code: string | null, chatId: number | null) { q.putDevice.run(token, code, chatId, Date.now()) },
     deviceByToken(token: string) { return q.deviceByToken.get(token) as { token: string; code: string | null; chatId: number | null } | undefined },
-    deviceByCode(code: string) { return q.deviceByCode.get(code) as { token: string; code: string | null; chatId: number | null } | undefined },
+    deviceByCode(code: string) {
+      return q.deviceByCode.get(code, Date.now() - PAIR_CODE_TTL_MS) as { token: string; code: string | null; chatId: number | null } | undefined
+    },
+    // Creates an unpaired device with a fresh, unique 6-digit code. Caps how many can wait at once.
+    newDevice(token: string, code: () => string, autoPaired: boolean): string | null {
+      q.dropStale.run(Date.now() - PAIR_CODE_TTL_MS)
+      if (!autoPaired && (q.unpairedSince.get(Date.now() - PAIR_CODE_TTL_MS) as { n: number }).n >= 20) return null
+      for (let i = 0; i < 10; i++) {
+        const c = code()
+        try { q.putDevice.run(token, autoPaired ? null : c, autoPaired ? 0 : null, Date.now()); return c } catch { /* code collision, retry */ }
+      }
+      return null
+    },
   }
 }

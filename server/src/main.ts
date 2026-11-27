@@ -97,19 +97,23 @@ if (tg) {
 setInterval(() => { queue.tick().catch(e => console.error('[tick]', e)) }, 1000)
 
 const port = Number(env.PORT ?? 8787)
+// Self-pairing (no Telegram) is a local simulator convenience only: never with a funded
+// wallet, and only on loopback so nobody else on the network can grab a device token.
+const autoPair = !tg && demoMode && !executors.ton_transfer
+if (!tg && !autoPair) console.warn('[restu] no TELEGRAM_BOT_TOKEN: devices cannot pair (set DEMO_MODE=1 without a wallet for simulator mode)')
 createHttp({
   db, queue,
   agentKeys: new Map((env.AGENT_KEYS ?? '').split(',').filter(Boolean).map(pair => {
     const [agent, key] = pair.split(':')
     return [key, agent] as [string, string]
   })),
-  autoPair: !tg,
+  autoPair,
   botName: () => botName,
   meeting: () => calendar.current(),
   ask,
   transcribe: pcm => stt.transcribe(pcm),
   correct,
   demo: demoMode ? demo : undefined,
-}).listen(port, () => {
-  console.log(`[restu] http://localhost:${port} · telegram ${tg ? 'on' : 'off (devices auto-pair)'} · claude ${llm.enabled ? 'on' : 'off'} · stt ${stt.enabled ? 'on' : 'off'} · ton ${executors.ton_transfer ? 'on' : 'off (transfers are recorded only)'} · demo ${demoMode ? 'on' : 'off'}`)
+}).listen(port, autoPair ? '127.0.0.1' : undefined, () => {
+  console.log(`[restu] http://localhost:${port} · telegram ${tg ? 'on' : autoPair ? 'off (local simulator: devices auto-pair, loopback only)' : 'off'} · claude ${llm.enabled ? 'on' : 'off'} · stt ${stt.enabled ? 'on' : 'off'} · ton ${executors.ton_transfer ? 'on' : 'off (transfers are recorded only)'} · demo ${demoMode ? 'on' : 'off'}`)
 })

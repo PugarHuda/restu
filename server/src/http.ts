@@ -22,10 +22,14 @@ export interface HttpDeps {
 
 const KINDS: ActionKind[] = ['telegram_message', 'ton_transfer', 'calendar_change', 'generic']
 
+// Auth is a header token (x-device / Bearer), never a cookie, so a permissive origin
+// does not let another site act as the wearer. Narrow it with CORS_ORIGIN when known.
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*'
+
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, {
     'content-type': 'application/json',
-    'access-control-allow-origin': '*',
+    'access-control-allow-origin': CORS_ORIGIN,
     'access-control-allow-headers': 'content-type, authorization, x-device',
     'access-control-allow-methods': 'GET, POST, OPTIONS',
   })
@@ -87,8 +91,8 @@ export function createHttp(d: HttpDeps) {
       // ---- glasses -------------------------------------------------------
       if (path === '/v1/pair/start' && req.method === 'POST') {
         const token = randomBytes(18).toString('base64url')
-        const code = String(randomInt(100000, 1000000))
-        d.db.saveDevice(token, code, d.autoPair ? 0 : null)
+        const code = d.db.newDevice(token, () => String(randomInt(100000, 1000000)), d.autoPair)
+        if (!code) return send(res, 429, { error: 'too many devices waiting to pair, try again in a few minutes' })
         return send(res, 200, { token, code })
       }
 

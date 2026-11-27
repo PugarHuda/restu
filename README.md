@@ -78,7 +78,7 @@ Requirements: Node 22.13+.
 cd server
 npm install
 cp .env.example .env         # DEMO_MODE=1 works with no keys at all
-npm test                     # 22 tests: policy, scam checks, intents, queue, ASK, ICS
+npm test                     # 23 tests: policy, scam checks, intents, queue, ASK, ICS
 npm start                    # http://localhost:8787
 
 # 2. glasses app + simulator
@@ -91,7 +91,7 @@ node node_modules/@evenrealities/evenhub-simulator/bin/index.js http://localhost
 #    click "Load Acme demo" on the phone page, or send /demo to your bot
 ```
 
-With `TELEGRAM_BOT_TOKEN` unset, the glasses pair themselves (simulator mode). With it set, the glasses show a 6-digit code; send `/pair <code>` to your bot.
+With `TELEGRAM_BOT_TOKEN` unset, `DEMO_MODE=1` and no agent wallet, the glasses pair themselves and the server listens on 127.0.0.1 only (local simulator mode). Pairing codes are unique, expire after 10 minutes, and `/pair` allows 5 wrong tries per chat. With it set, the glasses show a 6-digit code; send `/pair <code>` to your bot.
 
 On real G2: `npx evenhub qr --url http://<your-LAN-IP>:5173` and add that server origin to `app.json` → `network.whitelist`. Package with `npm run pack` → `restu.ehpk`.
 
