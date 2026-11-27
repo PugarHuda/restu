@@ -1,0 +1,7 @@
+node_modules
+dist
+*.ehpk
+.env
+server/data/*.db*
+docs/mcp-out.txt
+.playwright-mcp
