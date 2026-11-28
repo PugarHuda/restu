@@ -24,6 +24,9 @@ const secret = env.INTENT_SECRET ?? db.get('intent_secret') ?? (() => {
   const s = randomBytes(32).toString('base64url'); db.set('intent_secret', s); return s
 })()
 
+// Hosts without a persistent disk lose the database on restart: restore the owner from env.
+if (env.OWNER_CHAT_ID && !db.get('owner_chat_id')) db.set('owner_chat_id', env.OWNER_CHAT_ID)
+
 const llm = createLlm(env.ANTHROPIC_API_KEY)
 const stt = createStt({ url: env.STT_URL, key: env.STT_API_KEY, model: env.STT_MODEL })
 const calendar = createCalendar(env.CALENDAR_ICS_URL, demoMode)

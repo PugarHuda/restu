@@ -1,0 +1,13 @@
+# Keeps the free Render instance awake during judging (it sleeps after 15 idle minutes).
+name: keepalive
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS --max-time 60 "${RESTU_API:-https://restu-api.onrender.com}/health"
+        env:
+          RESTU_API: ${{ vars.RESTU_API }}

@@ -1,0 +1,37 @@
+# Render Blueprint: the Restu API (Telegram bot + approval queue + TON testnet executor).
+# Free instances sleep after 15 min without traffic and have no persistent disk;
+# .github/workflows/keepalive.yml pings /health, and OWNER_CHAT_ID restores the owner after a restart.
+services:
+  - type: web
+    name: restu-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.15.1
+      - key: DEMO_MODE
+        value: "1"
+      - key: DEMO_CONTACT
+        value: lynx129
+      - key: GOOGLE_SHEETS
+        value: Deals=1fU8fts974nD-sZLOcciR24qf5obr92VoP0VZvRl82yI,Metrics=1_WL8d45ZtgK6mcX_duG67YruN1J5d2V_NOPRR1j4ef8
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: AGENT_WALLET_MNEMONIC
+        sync: false
+      - key: AGENT_KEYS
+        sync: false
+      - key: INTENT_SECRET
+        sync: false
+      - key: OWNER_CHAT_ID
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: STT_URL
+        value: https://api.groq.com/openai/v1/audio/transcriptions
+      - key: STT_API_KEY
+        sync: false
