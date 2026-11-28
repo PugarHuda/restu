@@ -24,7 +24,7 @@ Track: **AI Assistants & Work** (core: Claude, Google Workspace) · second track
 | **Glasses app (load on G2 via QR / simulator)** | https://restu-glasses.vercel.app |
 | **Even Hub package** | [`restu.ehpk` (v0.1.0 release)](https://github.com/PugarHuda/restu/releases/tag/v0.1.0) |
 | **Telegram bot** | [@restu_glasses_bot](https://t.me/restu_glasses_bot) |
-| **API** | `https://seen-hrs-paul-sox.trycloudflare.com` (`/health`) |
+| **API** | `https://implies-magnificent-olympic-striking.trycloudflare.com` (`/health`) |
 | **Anti-scam evaluation** | [`docs/scam-eval.md`](docs/scam-eval.md): 200 labelled scenarios, 125/125 scams held, 0/75 legitimate payments wrongly held (synthetic; limits stated) |
 | **Live Google Sheet (ASK)** | [Restu demo · Metrics](https://docs.google.com/spreadsheets/d/1_WL8d45ZtgK6mcX_duG67YruN1J5d2V_NOPRR1j4ef8/edit) (link-shared, read live by the server) |
 | **Agent wallet (TON testnet)** | [`0QDanv8w…emB0J` on tonviewer](https://testnet.tonviewer.com/0QDanv8woLK2AzsY5M7hMBOxsMPZV5wcqzVmflXso8IemB0J): the demo's real transfers (0.1 GRAM courier fee auto-approved; 1.5 GRAM invoice re-routed from a poisoned address to the verified wallet card) |
