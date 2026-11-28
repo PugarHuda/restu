@@ -11,7 +11,7 @@
       "desc": "Talks to your Restu server to show approval requests from your agents and send your decisions.",
       "whitelist": [
         "http://localhost:8787",
-        "https://implies-magnificent-olympic-striking.trycloudflare.com"
+        "https://restu-api-w15o.onrender.com"
       ]
     },
     {
